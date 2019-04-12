@@ -16,3 +16,9 @@ set output "./img/z1.3/ninf.svg"
 set ylabel "Коэфф загрузки операторов"
 set xlabel "Число операторов"
 plot "./dat/inf.dat"  using 1:3 smooth csplines title  'Коэфф загрузки' w l ls 2
+#############
+set term svg enhanced background rgb 'white'
+set output "./img/z1.3/tinf.svg"
+set ylabel "Время ожидания"
+set xlabel "Число операторов"
+plot "./dat/inf.dat"  using 1:4 smooth csplines title  'Среднее время ожидания' w l ls 2

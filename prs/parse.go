@@ -10,12 +10,12 @@ import (
 type tsk1 struct {
 	Lambda   float64 `json:"Tc"`
 	Mu       float64 `json:"Ts"`
-	Waittime int     `json:"Tw"`
+	Waittime float64 `json:"Tw"`
 }
 
 type tsk2 struct {
-	Lambda float64 `json:"Ts"`
-	Mu     float64 `json:"Tc"`
+	Lambda float64 `json:"Tc"`
+	Mu     float64 `json:"Ts"`
 	Number int     `json:"n"`
 }
 
@@ -40,6 +40,8 @@ func GetQuest() Quest {
 	qst.Task1.Lambda = 1. / qst.Task1.Lambda
 	qst.Task1.Mu = 1. / qst.Task1.Mu
 
+	qst.Task2.Lambda = 1. / qst.Task2.Lambda
+	qst.Task2.Mu = 1. / qst.Task2.Mu
 	return qst
 
 }

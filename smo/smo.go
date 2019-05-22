@@ -3,183 +3,133 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"time"
 )
-
-var tme int
 
 type facil struct {
 	queue       int //число сообщений, ожидающих передачи
 	chan1active bool
 	chan2active bool
-	qt          []int
-	qi          int
-	repairs     []int
-	breaks      []int
-	bi          int
+}
+
+type Events struct {
+	incmes int //взходящее сообщение
+	breakc int //разрыв канала
+	ch2act int //активация 2го канала
+	ch1rep int //ремонт первого канала
 }
 
 const (
-	emtyque int = iota //очередь пустая передавать нечего
-	mainchn            //основной канал
-	broken
-	sparchn //резервный канал
-	updstat //проверка состояний
+	emptyq int = iota //пустая очередь
+	mesinq            //есть сообщение в очереди
+	mainse            //отправление по главному каналу
+	secnse            //отправление по второму каналу
+	actsec            //активация второго канала
 )
 
-func getTotalIn(q []int, curtime int) int {
-	t := 0
-	for _, v := range q {
-		if curtime > v {
-			t++
-		}
-	}
-	return t
+func NextEvent(starttime, n, delta int) int { //определяет время происхождения следующего события
+	return starttime + n + rand.Intn(delta)
 }
 
-func (fc facil) UpdateState(curstate int, curtime int) (int, int) {
-	var state int
-	switch curstate {
-	case emtyque:
-		if fc.chan1active {
-			state = mainchn
-		} else if fc.chan2active {
-			state = sparchn
-		}
-	case mainchn:
-		if curtime > fc.breaks[fc.bi] { //произошел разрыв
-			fc.chan1active = false
-			curtime = fc.breaks[fc.bi]
-			state = sparchn
-		} else if curtime < fc.qt[fc.qi] { //сообщение передано до прихода следующего
-			curtime = fc.qt[fc.qi]
-			fc.qi++
-			if fc.queue > 0 {
-				state = mainchn
-			} else if fc.queue == 0 {
-				state = emtyque
-			}
-		}
-	case sparchn:
-		if curtime < fc.qt[fc.qi] { //сообщение передано до прихода следующего
-			curtime = fc.qt[fc.qi]
-			fc.qi++
-			if fc.queue > 0 {
-				state = mainchn
-			} else if fc.queue == 0 {
-				state = emtyque
-			}
-		}
+func GenerateFirstEvents() Events { //определяет время происхождения следующего события
+	breakch := 165 + rand.Intn(71)
+	return Events{
+		incmes: 5 + rand.Intn(8),
+		breakc: breakch,
+		ch2act: breakch + 2 + rand.Intn(2),
+		ch1rep: breakch + 24 + rand.Intn(7),
 	}
 }
-
-func Generate(n, delta, fintime int) []int {
-	var q []int
-	for qt := n + rand.Intn(delta); qt < fintime; qt += n + rand.Intn(fintime) { //генерация поступающих сообщений
-		if qt < fintime {
-			q = append(q, qt)
-		}
-	}
-	return q
+func SendMessage(ctime int) int {
+	return ctime + 4 + rand.Intn(7)
 }
 
-func GenerateDelta(mas []int, n, delta int) []int {
-	var ms []int
-	for _, v := range mas {
-		ms = append(ms, v+n+rand.Intn(delta))
+func (ev *Events) CheckQueue(q, t int) (int, int) {
+	var State int
+	if t < ev.incmes {
+		if q == 0 {
+			State = emptyq
+		} else {
+			State = mesinq
+		}
+	} else if t >= ev.incmes {
+		for t >= ev.incmes { //сколько сообщений успело придти в накопитель до окончания передачи
+			ev.incmes = NextEvent(ev.incmes, 5, 8)
+			q++
+		}
+		State = mesinq
 	}
-	return ms
+	return State, q
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-	fintime := 500
-	q := Generate(5, 9, fintime)
-	fmt.Println(q, len(q))
-	breaks := Generate(165, 71, fintime)
-	fmt.Println(breaks, len(breaks))
-	repairs := GenerateDelta(breaks, 24, 7)
-
+	fintime := 3600 //конечное время моделирования
+	rand.Seed(1336)
+	State := mainse
+	ev := GenerateFirstEvents()
 	fc := facil{
 		queue:       1,
 		chan1active: true,
 		chan2active: false,
-		qt:          q,
-		qi:          0,
-		breaks:      breaks,
-		bi:          0,
 	}
-	//State := mainchn
-	//curt := 0
-	nq := 0
-	//nb := 0
-	for State, curt := mainchn, 0; curt <= fintime; {
-		//fmt.Println(fc.queue, State, curt)
-		switch State {
-		case emtyque:
-			curt = q[nq]
-			nq++
-			if nq >= len(q) {
-				break
-			}
-			fc.queue++
-			State = fc.UpdateState(State, curt)
-		case mainchn:
-			curt += 4 + rand.Intn(7) // передача по 1-му каналу
-			fc.UpdateState(State, curt)
-		case sparchn:
-
+	for curtime := 0; curtime < fintime; {
+		if fc.queue < 0 {
+			panic("negative queue")
 		}
-		//fmt.Println(fc.queue, State, curt)
+		switch State {
+		case emptyq:
+			fmt.Println("Empty queue in", curtime)
+			curtime = ev.incmes
+			fc.queue++
+			ev.incmes = NextEvent(ev.incmes, 5, 8)
+			State = mesinq
+		case mesinq:
+			if fc.chan1active {
+				State = mainse
+			} else if fc.chan2active {
+				State = secnse
+			} else {
+				State = actsec
+			}
+		case mainse:
+			fmt.Println("Sending in main", curtime, "queue:", fc.queue, "|next message at ", ev.incmes)
+			curtime = SendMessage(curtime)
+			fmt.Println("->", curtime)
+			if curtime > ev.breakc {
+				curtime = ev.breakc
+				fmt.Println("Break at", curtime)
+				State = mesinq
+				fc.chan1active = false
+				ev.breakc = NextEvent(ev.breakc, 165, 71)
+				continue
+			}
+			fc.queue--
+			State, fc.queue = ev.CheckQueue(fc.queue, curtime)
+		case secnse:
+			if !fc.chan2active {
+				State = actsec
+				continue
+			}
+			fmt.Println("Sending in secondary", curtime, "queue:", fc.queue, "|next message at", ev.incmes)
+			curtime = SendMessage(curtime)
+			fmt.Println("->", curtime)
+			fc.queue--
+			State, fc.queue = ev.CheckQueue(fc.queue, curtime)
+			if curtime > ev.ch1rep {
+				fmt.Println("Chan1 repaired at", curtime)
+				//State = mesinq
+				fc.chan1active = true
+				fc.chan2active = false
+				ev.ch1rep = NextEvent(ev.breakc, 24, 7)
+				continue
+			}
+		case actsec:
+			curtime = ev.ch2act
+			ev.ch2act = NextEvent(ev.breakc, 2, 2)
+			fmt.Println("Second chan activated at", curtime)
+			fc.chan2active = true
+			State = secnse
+		default:
+			panic("Unknown state!")
+		}
 	}
 }
-
-/*
-switch State {
-		case emtyque:
-			fmt.Println("Waiting to message in", q[nq])
-			curt = q[nq]
-			if nq < len(q) {
-				nq++
-			} else {
-				break
-			}
-			fc.queue++
-			if fc.chan1active {
-				State = mainchn
-			} else if fc.chan2active {
-				State = sparchn
-			}
-		case mainchn:
-			curt += 4 + rand.Intn(7) // передача по 1-му каналу
-			fmt.Println("Sending till", curt)
-			if nq >= len(q) {
-				break
-			}
-			if curt < q[nq] { //текущее время меньше чем время прихода след заявки
-				fc.queue--
-				if fc.queue == 0 {
-					State = emtyque
-				}
-			} else {
-				if nq < len(q) {
-					nq++
-				} else {
-					break
-				}
-			}
-		case sparchn:
-			if !fc.chan2active {
-				curt += 2 + rand.Intn(2)
-				fc.chan2active = true
-			}
-			curt += 4 + rand.Intn(7) // передача по 2-му каналу
-			fc.queue--
-			if fc.queue == 0 {
-				State = emtyque
-			}
-		}
-		//fmt.Println(fc.queue, State, curt)
-	}
-
-*/
